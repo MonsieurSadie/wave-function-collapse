@@ -9,11 +9,13 @@ public class TilesetParser : MonoBehaviour
   public int tileHeight = 8;
 
   // marge d'égalité de couleur
-  public float colorEpsilon = 0.1f;
-  public float likenessMinPercent = 0.8f;
+  public float colorEpsilon = 0.06f;
+  public float likenessMinPercent = 1f;
 
   public string outputFilename = "constraints.txt";
   string outputPath;
+
+  public bool LOG_DETAILS = false;
 
   Color[] tilesetData;
   int numTileX;
@@ -24,7 +26,7 @@ public class TilesetParser : MonoBehaviour
   string rules;
   
   [ContextMenu("Parse Tileset")]
-  void ParseTilset()
+  void DoParseTilset()
   {
     outputPath = Application.dataPath + "/" + outputFilename + ".txt";
     rules = "";
@@ -47,6 +49,7 @@ public class TilesetParser : MonoBehaviour
         FindMacthesForBorder(x, y, Direction.Right);
         FindMacthesForBorder(x, y, Direction.Down);
         FindMacthesForBorder(x, y, Direction.Up);
+        Debug.LogFormat("rules generated for tile {0}-{1}", x, y);
       }
     }
 
@@ -69,7 +72,7 @@ public class TilesetParser : MonoBehaviour
       }
     }
 
-    if(!foundMatch)
+    if(!foundMatch && LOG_DETAILS)
     {
       Debug.Log("didn't find any match for " + tilex +"-"+tiley + " in direction " + dir.ToString());
     }
@@ -79,7 +82,7 @@ public class TilesetParser : MonoBehaviour
   {
     int id0 = tile0x + tile0y * numTileX;
     int id1 = tile1x + tile1y * numTileX;
-    Debug.Log("comparing borders of tile " + id0 +" and tile " + id1 + " in direction " + direction);
+    if(LOG_DETAILS) Debug.Log("comparing borders of tile " + id0 +" and tile " + id1 + " in direction " + direction);
     bool identical = false;
 
     int start0x = tile0x * tileWidth;
@@ -112,7 +115,7 @@ public class TilesetParser : MonoBehaviour
           numEqualColors++;
         }else
         {
-          Debug.Log("pixel " + y + " doesn't match. diff is " + CompareColors(c1, c2));
+          if(LOG_DETAILS) Debug.Log("pixel " + y + " doesn't match. diff is " + CompareColors(c1, c2));
         }
       }
       float colorDistance = numEqualColors / tileHeight;

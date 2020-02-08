@@ -37,8 +37,6 @@ public class WaveFunctionCollapse : MonoBehaviour
 
   public int[] usedTiles;
 
-  public GameObject tilePrefab;
-
   public List<Constraint> constraints = new List<Constraint>();
 
   Cell[] grid;
@@ -79,6 +77,18 @@ public class WaveFunctionCollapse : MonoBehaviour
 
   void SetupGrid()
   {
+    // if a subset of tiles is not provided by user, we use all of them
+    if(usedTiles.Length == 0)
+    {
+      usedTiles = new int[tiles.Length];
+      for (int i = 0; i < usedTiles.Length; i++)
+      {
+        usedTiles[i] = i;
+      }
+    }
+
+
+
     grid = new Cell[gridWidth * gridHeight];
     for (int i = 0; i < grid.Length; i++)
     {
@@ -106,7 +116,6 @@ public class WaveFunctionCollapse : MonoBehaviour
 
   IEnumerator RunAlgorithm()
   {
-    //if(Input.GetKeyDown(KeyCode.Space))
     bool finished = false;
     while(!finished)
     {
@@ -115,7 +124,6 @@ public class WaveFunctionCollapse : MonoBehaviour
       if(nextGridCell == -1)
       {
         Debug.Log("--- algorithm completed");
-        // DisplayGrid();
         finished = true;
         break;
       }
@@ -123,12 +131,6 @@ public class WaveFunctionCollapse : MonoBehaviour
       int cellY = Mathf.FloorToInt((float)nextGridCell / gridWidth);
       int cellX = nextGridCell - cellY * gridWidth;
 
-      // DEBUG show selected cell
-      // cellY = 4;
-      // cellX = 2;
-      // nextGridCell = cellX + cellY * gridWidth;
-
-      // Debug.Log("selected cell " + cellX+"-"+cellY);
       #if STEP_BY_STEP 
       yield return new WaitForInput(); 
       #endif
@@ -137,9 +139,6 @@ public class WaveFunctionCollapse : MonoBehaviour
       // collapse
       int rndCandidateIdx = Random.Range(0, grid[nextGridCell].candidates.Count);
       int candidate = grid[nextGridCell].candidates[rndCandidateIdx];
-
-      // DEBUG
-      // candidate = 6;
       
       // update display
       for (int i = 0; i < grid[nextGridCell].candidates.Count; i++)
@@ -147,7 +146,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         int c = grid[nextGridCell].candidates[i];
         if(c != candidate) RemoveFromCellDisplay(grid[nextGridCell], c);
       }
-      ResolveCellDisplay(cellX, cellY, candidate);
+      ResolveCellDisplay(grid[nextGridCell], candidate);
 
       grid[nextGridCell].candidates.Clear();
       grid[nextGridCell].candidates.Add(candidate);
@@ -162,8 +161,6 @@ public class WaveFunctionCollapse : MonoBehaviour
 
       yield return PropagateWave(new Vector2Int(cellX, cellY));
 
-
-      // Debug.Log("wave propagated");
       #if STEP_BY_STEP 
       yield return new WaitForInput(); 
       #endif
@@ -247,7 +244,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     if(cell.candidates.Count == 1)
     {
-      ResolveCellDisplay(cell.x, cell.y, cell.candidates[0]);
+      ResolveCellDisplay(cell, cell.candidates[0]);
     }
 
     yield return null;
@@ -289,26 +286,31 @@ public class WaveFunctionCollapse : MonoBehaviour
     else return candidates[ Random.Range(0, candidates.Count) ];
   }
 
-  void PropagateWave()
-  {
+  GameObject gridDisplay;
+  Dictionary<string, GameObject> gridDisplayObjects = new Dictionary<string, GameObject>();
+  float zoomedTileScale; // scale value for a minified scale to reach full cell size (happens when only one tile is left in a cell)
 
+  void ClearDisplay()
+  {
+    Destroy(gridDisplay);
+    gridDisplayObjects.Clear();
   }
 
-  GameObject gridDisplay;
   void CreateGridDisplay()
   {
     float tileW = tiles[0].bounds.size.x;
     float tileH = tiles[0].bounds.size.y;
-    float scale = 0.1f;
+    float scale = 1f;
 
     int numTilesInCellW = Mathf.CeilToInt(Mathf.Sqrt(usedTiles.Length));
     int numTilesInCellH = numTilesInCellW;
+    zoomedTileScale = numTilesInCellW;
     float cellW = tileW * scale * numTilesInCellW;
     float cellH = tileH * scale * numTilesInCellH;
 
     Vector3 startCorner = new Vector3();
-    startCorner.x = -(cellW * gridWidth) * 0.5f - cellW*0.5f;
-    startCorner.y = -(cellH * gridHeight) * 0.5f - cellH*0.5f;
+    startCorner.x = -(cellW * gridWidth) * 0.5f;
+    startCorner.y = -(cellH * gridHeight) * 0.5f;
 
     gridDisplay = new GameObject("GridDisplay");
 
@@ -316,9 +318,11 @@ public class WaveFunctionCollapse : MonoBehaviour
     {
       for (int x = 0; x < gridWidth; x++)
       {
-        GameObject root = new GameObject("" + x + "-" + y);
+        string name = x + "-" + y;
+        GameObject root = new GameObject(name);
         root.transform.parent = gridDisplay.transform;
         root.transform.position = startCorner + Vector3.right * x * cellW + Vector3.up * y * cellH;
+        gridDisplayObjects.Add(name, root);
 
         GameObject center = new GameObject("center");
         center.transform.parent = root.transform;
@@ -340,6 +344,10 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
       }
     }
+
+    // zoom camera to fit grid height
+    // camera height = cellH * gridHeight
+    Camera.main.orthographicSize = cellH * gridHeight * 0.5f;
   }
 
   void RemoveFromCellDisplay(Cell cell, int tileid)
@@ -350,20 +358,32 @@ public class WaveFunctionCollapse : MonoBehaviour
       {
         int x = i % gridWidth;
         int y = Mathf.FloorToInt( (float)i/gridWidth );
-        GameObject o = GameObject.Find(""+x+"-"+y);
+        GameObject o = gridDisplayObjects[cell.name];
         Transform tile = o.transform.Find(""+tileid);
-        tile.gameObject.SetActive(false);
+        if(tile != null)
+        {
+          tile.gameObject.SetActive(false);
+        }else
+        {
+          Debug.LogErrorFormat("couldn't find tile {0} in cell {1}", tileid, cell.name);
+        }
       }
     }
   }
 
-  void ResolveCellDisplay(int cellX, int cellY, int tileid)
+  void ResolveCellDisplay(Cell cell, int tileid)
   {
-    GameObject o = GameObject.Find(""+cellX+"-"+cellY);
+    GameObject o = gridDisplayObjects[cell.name];
     Transform center = o.transform.Find("center");
     Transform tileTr = o.transform.Find(""+tileid);
-    tileTr.localScale = new Vector3(0.4f, 0.4f, 1);
-    tileTr.position = center.position;
+    if(tileTr != null)
+    {
+      tileTr.localScale = new Vector3(zoomedTileScale, zoomedTileScale, 1);
+      tileTr.position = center.position;
+    }else
+    {
+      Debug.LogErrorFormat("couldn't find tile {0} in cell {1}", tileid, cell.name);
+    }
   }
 
 
