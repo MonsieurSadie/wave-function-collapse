@@ -37,6 +37,8 @@ public class WaveFunctionCollapse : MonoBehaviour
 
   public int[] usedTiles;
 
+  public int[] tilesWeights;
+
   public List<Constraint> constraints = new List<Constraint>();
 
   Cell[] grid;
@@ -44,6 +46,8 @@ public class WaveFunctionCollapse : MonoBehaviour
   public int gridHeight = 8;
 
   public string constraintsFilename = "constraints.txt";
+
+  Dictionary<int, List<Constraint>> rulesByStartID;
 
   void Awake()
   {
@@ -73,6 +77,18 @@ public class WaveFunctionCollapse : MonoBehaviour
 
       constraints.Add(c);
     }
+
+
+    rulesByStartID = new Dictionary<int, List<Constraint>>();
+    for (int i = 0; i < constraints.Count; i++)
+    {
+      int tileid = constraints[i].tile0;
+      if(!rulesByStartID.ContainsKey(tileid))
+      {
+        rulesByStartID.Add(tileid, new List<Constraint>());
+      }
+      rulesByStartID[tileid].Add(constraints[i]);
+    }
   }
 
   void SetupGrid()
@@ -87,7 +103,11 @@ public class WaveFunctionCollapse : MonoBehaviour
       }
     }
 
-
+    if(tilesWeights.Length == 0)
+    {
+      tilesWeights = new int[tiles.Length];
+      for (int i = 0; i < tilesWeights.Length; i++) tilesWeights[i] = 1;
+    }
 
     grid = new Cell[gridWidth * gridHeight];
     for (int i = 0; i < grid.Length; i++)
@@ -137,8 +157,25 @@ public class WaveFunctionCollapse : MonoBehaviour
 
 
       // collapse
-      int rndCandidateIdx = Random.Range(0, grid[nextGridCell].candidates.Count);
-      int candidate = grid[nextGridCell].candidates[rndCandidateIdx];
+      int candidate = grid[nextGridCell].candidates[0];
+      int sumWeights = 0;
+      int numCandidates = grid[nextGridCell].candidates.Count;
+      for (int i = 0; i < numCandidates; i++)
+      {
+        sumWeights += tilesWeights[grid[nextGridCell].candidates[i]];
+      }
+      int rnd = Random.Range(0, sumWeights);
+      for (int i = 0; i < numCandidates; i++)
+      {
+        int candidateWeight = tilesWeights[grid[nextGridCell].candidates[i]];
+        if(candidateWeight < rnd)
+        {
+          candidate =  grid[nextGridCell].candidates[i];
+        }else
+        {
+          rnd -= candidateWeight;
+        }
+      }
       
       // update display
       for (int i = 0; i < grid[nextGridCell].candidates.Count; i++)
@@ -182,14 +219,26 @@ public class WaveFunctionCollapse : MonoBehaviour
       Cell currentCell = grid[cellToExplore.x + cellToExplore.y*gridWidth];
       if(!exploredCells.Contains(cellToExplore))
       {
+        int numCandidatesLeft   = currentCell.left  != null ? currentCell.left.candidates.Count : 0;
+        int numCandidatesRight  = currentCell.right != null ? currentCell.right.candidates.Count : 0;
+        int numCandidatesUp     = currentCell.up    != null ? currentCell.up.candidates.Count : 0;
+        int numCandidatesDown   = currentCell.down  != null ? currentCell.down.candidates.Count : 0;
         
         yield return PropagateCellChangesToNeighbours(currentCell.x, currentCell.y);
         exploredCells.Add(cellToExplore);
 
-        if(currentCell.right != null && currentCell.right.candidates.Count > 1) explorationList.Add(cellToExplore + Vector2Int.right);
-        if(currentCell.left != null && currentCell.left.candidates.Count > 1) explorationList.Add(cellToExplore - Vector2Int.right);
-        if(currentCell.up != null && currentCell.up.candidates.Count > 1) explorationList.Add(cellToExplore + Vector2Int.up);
-        if(currentCell.down != null && currentCell.down.candidates.Count > 1) explorationList.Add(cellToExplore - Vector2Int.up);
+        int newCandidatesLeft   = currentCell.left  != null ? currentCell.left.candidates.Count : 0;
+        int newCandidatesRight  = currentCell.right != null ? currentCell.right.candidates.Count : 0;
+        int newCandidatesUp     = currentCell.up    != null ? currentCell.up.candidates.Count : 0;
+        int newCandidatesDown   = currentCell.down  != null ? currentCell.down.candidates.Count : 0;
+
+        if(currentCell.right != null && newCandidatesRight != numCandidatesRight && currentCell.right.candidates.Count > 1) explorationList.Add(cellToExplore + Vector2Int.right);
+
+        if(currentCell.left != null && newCandidatesLeft != numCandidatesLeft && currentCell.left.candidates.Count > 1) explorationList.Add(cellToExplore - Vector2Int.right);
+
+        if(currentCell.up != null && newCandidatesUp != numCandidatesUp && currentCell.up.candidates.Count > 1) explorationList.Add(cellToExplore + Vector2Int.up);
+
+        if(currentCell.down != null && newCandidatesDown != numCandidatesDown && currentCell.down.candidates.Count > 1) explorationList.Add(cellToExplore - Vector2Int.up);
       }
       explorationList.RemoveAt(0);
     }
@@ -252,11 +301,13 @@ public class WaveFunctionCollapse : MonoBehaviour
 
   bool IsValidConstraint(int tilea, int tileb, Direction dir)
   {
-    for (int i = 0; i < constraints.Count; i++)
+    if(!rulesByStartID.ContainsKey(tilea)) return false;
+    List<Constraint> tileaRules = rulesByStartID[tilea];
+    for (int i = 0; i < tileaRules.Count; i++)
     {
-      if( constraints[i].tile0 == tilea && 
-          constraints[i].tile1 == tileb &&
-          constraints[i].direction == dir)
+      if( tileaRules[i].tile0 == tilea && 
+          tileaRules[i].tile1 == tileb &&
+          tileaRules[i].direction == dir)
       {
         return true;
       }

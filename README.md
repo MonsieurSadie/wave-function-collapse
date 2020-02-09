@@ -32,12 +32,10 @@ Celui-ci a les paramètres suivants :
 - Used Tiles: utile uniquement si vous ne voulez utiliser qu'une partie des tiles. Dans ce cas, remplissez le tabeau avec les ID des tiles que vous voulez utiliser. Laissez la taille à 0 sinon.
 - Grid Width/Height: nombre de cases dans l'image générée
 - constraints filename: nom du fichier contenant les règles, avec l'extension .txt
-
+- tiles weights : permet de donner un poid différent pour chaque tile lorsqu'un choix aléatoire doit être fait. Si vous ne renseignez rien dans le tableau, chaque poid sera à 1.
 
 
 # Remarques
-Etrangement, l'algorithme est souvent lent quand il ne reste que peu de possibilités.
-Je ferai probablement une mise à jour prochainement.
 Pensez à prendre des screenshots quand vous obtenez une composition intéressante.
 
 Conseil : essayez au maximum d'avoir des bordures avec les mêmes pixels.
